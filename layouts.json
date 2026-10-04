@@ -1,0 +1,91 @@
+{
+  "_about": "Каталог макетов шаблона VITOMEK: какие поля есть у каждого макета и сколько текста в них помещается. Единый источник для всех сценариев сборки. idx — номер плейсхолдера в макете pptx.",
+  "layouts": {
+    "Обложка": {
+      "use": "первый слайд: название презентации",
+      "fields": {
+        "title":    {"idx": 0, "type": "text", "label": "Название презентации", "max": 70, "required": true},
+        "subtitle": {"idx": 1, "type": "text", "label": "Подзаголовок / ключевая мысль", "max": 90},
+        "meta":     {"idx": 2, "type": "text", "label": "Дата • автор, отдел", "max": 60}
+      }
+    },
+    "Раздел": {
+      "use": "разделитель между частями презентации",
+      "fields": {
+        "number": {"idx": 1, "type": "text", "label": "Номер раздела (01, 02…)", "max": 3},
+        "title":  {"idx": 0, "type": "text", "label": "Название раздела", "max": 45, "required": true}
+      }
+    },
+    "Заголовок и текст": {
+      "use": "основной рабочий слайд: заголовок + список",
+      "fields": {
+        "title":   {"idx": 0, "type": "text", "label": "Заголовок", "max": 60, "required": true},
+        "bullets": {"idx": 1, "type": "list", "label": "Пункты списка (можно подпункты)", "max_items": 6, "max": 110, "max_total": 600, "required": true}
+      }
+    },
+    "Две колонки": {
+      "use": "сравнение: было / стало, до / после, вариант А / вариант Б",
+      "fields": {
+        "title":       {"idx": 0, "type": "text", "label": "Заголовок", "max": 60, "required": true},
+        "left_title":  {"idx": 1, "type": "text", "label": "Подзаголовок левой колонки", "max": 30, "required": true},
+        "left":        {"idx": 2, "type": "list", "label": "Пункты левой колонки", "max_items": 4, "max": 80, "max_total": 300, "required": true},
+        "right_title": {"idx": 3, "type": "text", "label": "Подзаголовок правой колонки", "max": 30, "required": true},
+        "right":       {"idx": 4, "type": "list", "label": "Пункты правой колонки", "max_items": 4, "max": 80, "max_total": 300, "required": true}
+      }
+    },
+    "Текст и картинка": {
+      "use": "текст слева, фото/иллюстрация справа",
+      "fields": {
+        "title":   {"idx": 0, "type": "text", "label": "Заголовок", "max": 60, "required": true},
+        "bullets": {"idx": 1, "type": "list", "label": "Пункты слева", "max_items": 5, "max": 70, "max_total": 350, "required": true},
+        "image":   {"idx": 2, "type": "image", "label": "Картинка справа: путь к файлу (если нет — поле остаётся для ручной вставки)"}
+      }
+    },
+    "Три карточки": {
+      "use": "ровно три параллельных пункта: шаги, преимущества, этапы",
+      "fields": {
+        "title": {"idx": 0, "type": "text", "label": "Заголовок", "max": 60, "required": true}
+      },
+      "items": {"key": "cards", "label": "Карточки", "min": 3, "max": 3,
+                "fields": {"title": {"idx": [1, 3, 5], "type": "text", "label": "Подзаголовок карточки", "max": 22, "required": true},
+                           "text":  {"idx": [2, 4, 6], "type": "text", "label": "Текст карточки", "max": 130, "required": true}}}
+    },
+    "Цифры": {
+      "use": "2–4 ключевых показателя крупными цифрами",
+      "fields": {
+        "title": {"idx": 0, "type": "text", "label": "Заголовок", "max": 60, "required": true}
+      },
+      "items": {"key": "numbers", "label": "Показатели", "min": 2, "max": 4,
+                "fields": {"value":   {"idx": [1, 3, 5, 7], "type": "text", "label": "Цифра (коротко: 50 г, –37 %, 2)", "max": 6, "required": true},
+                           "caption": {"idx": [2, 4, 6, 8], "type": "text", "label": "Подпись к цифре", "max": 60, "required": true}}}
+    },
+    "Цитата / ключевая мысль": {
+      "use": "одна сильная фраза или отзыв клиента",
+      "fields": {
+        "quote":  {"idx": 1, "type": "text", "label": "Цитата / мысль", "max": 150, "required": true},
+        "author": {"idx": 2, "type": "text", "label": "Автор (— Имя, должность, хозяйство)", "max": 90}
+      }
+    },
+    "Только заголовок": {
+      "use": "таблица (или место для диаграммы/схемы, которую вставят вручную)",
+      "fields": {
+        "title": {"idx": 0, "type": "text", "label": "Заголовок", "max": 60, "required": true},
+        "table": {"type": "table", "label": "Таблица: header — заголовки столбцов, rows — строки", "max_cols": 6, "max_rows": 7, "max": 35}
+      }
+    },
+    "Спасибо за внимание": {
+      "use": "последний слайд",
+      "fields": {
+        "title":    {"idx": 0, "type": "text", "label": "Заголовок", "max": 40, "default": "Спасибо за внимание!"},
+        "contacts": {"idx": 1, "type": "list", "label": "Контакты (строки)", "max_items": 4, "max": 45, "default": ["info@vitomek.com", "+7 495 902-03-32", "vitomek.com"]}
+      }
+    }
+  },
+  "rules": [
+    "Первый слайд — «Обложка», последний — «Спасибо за внимание».",
+    "«Три карточки» — только ровно три пункта; для двух — «Две колонки», для четырёх и больше — «Заголовок и текст».",
+    "Не больше трёх слайдов подряд на одном макете: чередуй подачу.",
+    "Тексты — только из исходного материала, без новых фактов и цифр.",
+    "Укладывайся в лимиты знаков: длинное — сократи или разбей на два слайда."
+  ]
+}
