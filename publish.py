@@ -9,20 +9,21 @@
   скачивания, ниже — все остальные готовые презентации;
 - печатает путь к странице: её нужно показать в чате через display_file(path, inline=true).
 
-Ссылки на странице относительные — просмотрщик Open WebUI отдаёт HTML по пути файла,
-поэтому они ведут прямо к файлам в терминале.
+Файл и превью встроены в страницу (base64): кнопка скачивает без обращения к серверу,
+поэтому работает в любом браузере, даже если он не передаёт cookie во встроенный просмотрщик чата.
 """
 import argparse
+import base64
 import html
 import shutil
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote
 
 READY = 'готовые презентации'
 SERVICE = 'служебное'
 PREVIEWS = 'превью'
 PAGE = 'скачать.html'
+PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 
 def size_label(p):
@@ -38,8 +39,8 @@ def slide_count(p):
         return None
 
 
-def href(*parts):
-    return '/'.join(quote(x) for x in parts)
+def b64(p):
+    return base64.b64encode(p.read_bytes()).decode()
 
 
 def page(root, current):
@@ -53,13 +54,12 @@ def page(root, current):
         bits += [size_label(p), datetime.fromtimestamp(p.stat().st_mtime).strftime('%d.%m.%Y %H:%M')]
         return ' · '.join(bits)
 
+    # Файл и превью встроены в страницу: просмотрщик чата открывает её в изолированном iframe,
+    # где браузер может не передать cookie входа, поэтому ссылки на файлы терминала ненадёжны.
     prev = root / SERVICE / PREVIEWS / (current.stem + '.jpg')
-    img = (f'<a href="{href(PREVIEWS, prev.name)}" target="_blank"><img src="{href(PREVIEWS, prev.name)}" '
-           f'alt="Обзор слайдов"></a>') if prev.exists() else ''
-    rows = ''.join(
-        f'<li><a href="{href("..", READY, p.name)}" download="{html.escape(p.name)}">{html.escape(p.stem)}</a>'
-        f'<span>{meta(p)}</span></li>' for p in others)
-    older = f'<h2>Другие готовые презентации</h2><ul>{rows}</ul>' if others else ''
+    img = f'<img src="data:image/jpeg;base64,{b64(prev)}" alt="Обзор слайдов">' if prev.exists() else ''
+    rows = ''.join(f'<li>{html.escape(p.stem)}<span>{meta(p)}</span></li>' for p in others)
+    older = (f'<h2>Другие готовые презентации (в той же папке)</h2><ul>{rows}</ul>') if others else ''
     return f'''<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8"><title>Готовые презентации VITOMEK</title>
 <style>
@@ -68,22 +68,37 @@ def page(root, current):
  .tag{{font-size:12px;color:#6f9a1e;text-transform:uppercase;letter-spacing:.06em}}
  h1{{font-size:20px;margin:6px 0 4px}} .meta{{color:#7a7a7a;font-size:13px;margin-bottom:14px}}
  .btn{{display:inline-block;background:#0C4C4C;color:#fff;text-decoration:none;font-weight:bold;
-   padding:12px 22px;border-radius:8px;font-size:15px}} .btn:hover{{background:#4E7C7C}}
+   padding:12px 22px;border-radius:8px;font-size:15px;cursor:pointer}} .btn:hover{{background:#4E7C7C}}
  img{{display:block;width:100%;border:1px solid #eee;border-radius:8px;margin-top:16px}}
  .where{{font-size:12px;color:#7a7a7a;margin-top:12px}}
  h2{{font-size:15px;margin:24px 0 8px}} ul{{list-style:none;padding:0;margin:0;max-width:760px}}
  li{{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #eee;font-size:14px}}
- li a{{color:#0C4C4C}} li span{{color:#7a7a7a;font-size:12px;white-space:nowrap}}
+ li span{{color:#7a7a7a;font-size:12px;white-space:nowrap}}
 </style></head><body>
 <div class="card">
  <div class="tag">Готовая презентация</div>
  <h1>{html.escape(current.stem)}</h1>
  <div class="meta">{meta(current)}</div>
- <a class="btn" href="{href("..", READY, current.name)}" download="{html.escape(current.name)}">⬇ Скачать .pptx</a>
+ <a class="btn" id="dl" download="{html.escape(current.name)}"
+    href="data:{PPTX_MIME};base64,{b64(current)}">⬇ Скачать .pptx</a>
  {img}
- <div class="where">Файл лежит в папке терминала: витомэк-презентации / {READY}</div>
+ <div class="where">Файл также лежит в папке терминала: витомэк-презентации / {READY}</div>
 </div>
 {older}
+<script>
+// data:-ссылка большого размера может не скачаться в некоторых браузерах — отдаём через Blob
+document.getElementById('dl').addEventListener('click', function (e) {{
+  try {{
+    var a = this, b = atob(a.href.split(',')[1]), u = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    var url = URL.createObjectURL(new Blob([u], {{type: '{PPTX_MIME}'}}));
+    var t = document.createElement('a'); t.href = url; t.download = a.getAttribute('download');
+    document.body.appendChild(t); t.click(); t.remove();
+    setTimeout(function () {{ URL.revokeObjectURL(url); }}, 10000);
+    e.preventDefault();
+  }} catch (err) {{ /* остаётся обычная data:-ссылка */ }}
+}});
+</script>
 </body></html>
 '''
 
