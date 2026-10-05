@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Выкладка готовой презентации для пользователя (Open WebUI + Open Terminal).
 
-    python3 publish.py "<собранный>.pptx" [--root ~/витомэк-презентации]
+    python3 publish.py "<собранный>.pptx" [--root ~/витомэк-презентации] [--link]
 
 - копирует .pptx в «<root>/готовые презентации/» (там лежат только презентации);
 - кладёт картинку-обзор (…_preview/contact.jpg) в «<root>/служебное/превью/»;
@@ -9,13 +9,16 @@
   скачивания, ниже — все остальные готовые презентации;
 - печатает путь к странице: её нужно показать в чате через display_file(path, inline=true).
 
-Файл и превью встроены в страницу (base64): кнопка скачивает без обращения к серверу,
+По умолчанию файл и превью встроены в страницу (base64): кнопка скачивает без обращения к серверу,
 поэтому работает в любом браузере, даже если он не передаёт cookie во встроенный просмотрщик чата.
+С --link страница лёгкая: относительные ссылки на файлы терминала + подсказка, как скачать через
+панель «Файлы», если браузер ответит ошибкой.
 """
 import argparse
 import base64
 import html
 import shutil
+from urllib.parse import quote
 from datetime import datetime
 from pathlib import Path
 
@@ -43,7 +46,33 @@ def b64(p):
     return base64.b64encode(p.read_bytes()).decode()
 
 
-def page(root, current):
+def href(*parts):
+    return '/'.join(quote(x) for x in parts)
+
+
+HINT = f'''<div class="hint"><b>Если вместо скачивания появилась ошибка</b> (некоторые браузеры так защищают вход):
+ <ol><li>В правом верхнем углу чата нажмите «Управление» и откройте вкладку «Файлы».</li>
+ <li>Перейдите в папку <b>витомэк-презентации → {READY}</b>.</li>
+ <li>У нужного файла нажмите «⋯» → «Загрузить» — файл скачается на компьютер.</li></ol></div>'''
+
+
+SCRIPT = '''<script>
+// data:-ссылка большого размера может не скачаться в некоторых браузерах — отдаём через Blob
+document.getElementById('dl').addEventListener('click', function (e) {
+  try {
+    var a = this, b = atob(a.href.split(',')[1]), u = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    var url = URL.createObjectURL(new Blob([u], {type: '%s'}));
+    var t = document.createElement('a'); t.href = url; t.download = a.getAttribute('download');
+    document.body.appendChild(t); t.click(); t.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    e.preventDefault();
+  } catch (err) { /* остаётся обычная data:-ссылка */ }
+});
+</script>''' % PPTX_MIME
+
+
+def page(root, current, embed=True):
     ready = sorted((root / READY).glob('*.pptx'), key=lambda p: p.stat().st_mtime, reverse=True)
     others = [p for p in ready if p.name != current.name]
 
@@ -54,11 +83,22 @@ def page(root, current):
         bits += [size_label(p), datetime.fromtimestamp(p.stat().st_mtime).strftime('%d.%m.%Y %H:%M')]
         return ' · '.join(bits)
 
-    # Файл и превью встроены в страницу: просмотрщик чата открывает её в изолированном iframe,
-    # где браузер может не передать cookie входа, поэтому ссылки на файлы терминала ненадёжны.
+    # embed: файл и превью встроены в страницу — просмотрщик чата открывает её в изолированном iframe,
+    # где браузер может не передать cookie входа, и тогда относительные ссылки на файлы терминала не работают.
     prev = root / SERVICE / PREVIEWS / (current.stem + '.jpg')
-    img = f'<img src="data:image/jpeg;base64,{b64(prev)}" alt="Обзор слайдов">' if prev.exists() else ''
-    rows = ''.join(f'<li>{html.escape(p.stem)}<span>{meta(p)}</span></li>' for p in others)
+    if embed:
+        src = f'data:image/jpeg;base64,{b64(prev)}' if prev.exists() else ''
+        dl = f'data:{PPTX_MIME};base64,{b64(current)}'
+        rows = ''.join(f'<li>{html.escape(p.stem)}<span>{meta(p)}</span></li>' for p in others)
+        script, hint = SCRIPT, ''
+    else:
+        src = href(PREVIEWS, prev.name) if prev.exists() else ''
+        dl = href('..', READY, current.name)
+        rows = ''.join(
+            f'<li><a href="{href("..", READY, p.name)}" download="{html.escape(p.name)}">{html.escape(p.stem)}</a>'
+            f'<span>{meta(p)}</span></li>' for p in others)
+        script, hint = '', HINT
+    img = f'<img src="{src}" alt="Обзор слайдов">' if src else ''
     older = (f'<h2>Другие готовые презентации (в той же папке)</h2><ul>{rows}</ul>') if others else ''
     return f'''<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8"><title>Готовые презентации VITOMEK</title>
@@ -73,32 +113,22 @@ def page(root, current):
  .where{{font-size:12px;color:#7a7a7a;margin-top:12px}}
  h2{{font-size:15px;margin:24px 0 8px}} ul{{list-style:none;padding:0;margin:0;max-width:760px}}
  li{{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #eee;font-size:14px}}
- li span{{color:#7a7a7a;font-size:12px;white-space:nowrap}}
+ li a{{color:#0C4C4C}} li span{{color:#7a7a7a;font-size:12px;white-space:nowrap}}
+ .hint{{font-size:13px;color:#4E7C7C;background:#F3EED0;border-radius:8px;padding:10px 14px;margin-top:14px}}
+ .hint ol{{margin:6px 0 0;padding-left:20px}} .hint li{{display:list-item;border:0;padding:2px 0}}
 </style></head><body>
 <div class="card">
  <div class="tag">Готовая презентация</div>
  <h1>{html.escape(current.stem)}</h1>
  <div class="meta">{meta(current)}</div>
  <a class="btn" id="dl" download="{html.escape(current.name)}"
-    href="data:{PPTX_MIME};base64,{b64(current)}">⬇ Скачать .pptx</a>
+    href="{dl}">⬇ Скачать .pptx</a>
+ {hint}
  {img}
  <div class="where">Файл также лежит в папке терминала: витомэк-презентации / {READY}</div>
 </div>
 {older}
-<script>
-// data:-ссылка большого размера может не скачаться в некоторых браузерах — отдаём через Blob
-document.getElementById('dl').addEventListener('click', function (e) {{
-  try {{
-    var a = this, b = atob(a.href.split(',')[1]), u = new Uint8Array(b.length);
-    for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
-    var url = URL.createObjectURL(new Blob([u], {{type: '{PPTX_MIME}'}}));
-    var t = document.createElement('a'); t.href = url; t.download = a.getAttribute('download');
-    document.body.appendChild(t); t.click(); t.remove();
-    setTimeout(function () {{ URL.revokeObjectURL(url); }}, 10000);
-    e.preventDefault();
-  }} catch (err) {{ /* остаётся обычная data:-ссылка */ }}
-}});
-</script>
+{script}
 </body></html>
 '''
 
@@ -107,6 +137,7 @@ def main():
     ap = argparse.ArgumentParser(description='Выложить готовую презентацию и обновить страницу скачивания')
     ap.add_argument('pptx', help='собранный .pptx')
     ap.add_argument('--root', default=str(Path.home() / 'витомэк-презентации'))
+    ap.add_argument('--link', action='store_true', help='не встраивать файл: ссылки + подсказка про панель «Файлы»')
     a = ap.parse_args()
 
     src = Path(a.pptx).expanduser().resolve()
@@ -122,7 +153,7 @@ def main():
         shutil.copy2(contact, root / SERVICE / PREVIEWS / (src.stem + '.jpg'))
 
     out = root / SERVICE / PAGE
-    out.write_text(page(root, dst), encoding='utf-8')
+    out.write_text(page(root, dst, embed=not a.link), encoding='utf-8')
     print(f'Готово: {dst}')
     print(f'Страница скачивания: {out}')
     print(f'Покажи её в чате: display_file(path="{out}", inline=true)')
