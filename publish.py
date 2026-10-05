@@ -50,10 +50,18 @@ def href(*parts):
     return '/'.join(quote(x) for x in parts)
 
 
-HINT = f'''<div class="hint"><b>Если вместо скачивания появилась ошибка</b> (некоторые браузеры так защищают вход):
+def hint_html(name):
+    return f'''<div class="hint"><b>Если вместо скачивания появилась ошибка</b> (некоторые браузеры так защищают вход):
  <ol><li>В правом верхнем углу чата нажмите «Управление» и откройте вкладку «Файлы».</li>
  <li>Перейдите в папку <b>витомэк-презентации → {READY}</b>.</li>
- <li>У нужного файла нажмите «⋯» → «Загрузить» — файл скачается на компьютер.</li></ol></div>'''
+ <li>У файла «{html.escape(name)}» нажмите «⋯» → «Загрузить» — файл скачается на компьютер.</li></ol></div>'''
+
+
+def answer_text(name):
+    """Готовый текст для начала ответа агента (режим --link) — модель копирует его, а не пишет сама."""
+    return ('Презентация готова — кнопка «Скачать .pptx» выше.\n'
+            'Если браузер вместо скачивания показал ошибку: справа вверху нажмите «Управление» → вкладка «Файлы» → '
+            f'витомэк-презентации → {READY} → у файла «{name}» нажмите «⋯» → «Загрузить».')
 
 
 SCRIPT = '''<script>
@@ -97,7 +105,7 @@ def page(root, current, embed=True):
         rows = ''.join(
             f'<li><a href="{href("..", READY, p.name)}" download="{html.escape(p.name)}">{html.escape(p.stem)}</a>'
             f'<span>{meta(p)}</span></li>' for p in others)
-        script, hint = '', HINT
+        script, hint = '', hint_html(current.name)
     img = f'<img src="{src}" alt="Обзор слайдов">' if src else ''
     older = (f'<h2>Другие готовые презентации (в той же папке)</h2><ul>{rows}</ul>') if others else ''
     return f'''<!DOCTYPE html>
@@ -157,6 +165,10 @@ def main():
     print(f'Готово: {dst}')
     print(f'Страница скачивания: {out}')
     print(f'Покажи её в чате: display_file(path="{out}", inline=true)')
+    if a.link:
+        print('\n=== ТЕКСТ ДЛЯ ОТВЕТА: скопируй дословно в начало ответа пользователю ===')
+        print(answer_text(dst.name))
+        print('=== КОНЕЦ ТЕКСТА ===')
 
 
 if __name__ == '__main__':
